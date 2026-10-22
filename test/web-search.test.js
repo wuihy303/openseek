@@ -125,3 +125,10 @@ test('provider response sizes and query concurrency are bounded', async () => {
   release();
   await first;
 });
+
+test('multiword queries prioritize matching tool pages before broad topic pages', async () => {
+  const results = '<html><a class="result__a" href="https://guide.example/">Markdown Guide</a><a class="result__snippet">Markdown syntax reference.</a><a class="result__a" href="https://editor.example/">Online Markdown Editor</a><a class="result__snippet">Write Markdown online.</a></html>';
+  const search = createWebSearchService({ fetchImpl: async () => new Response(results) });
+  const data = await search({ query: 'online markdown editor', perPage: 1 });
+  assert.equal(data.items[0].domain, 'editor.example');
+});

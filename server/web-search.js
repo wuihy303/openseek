@@ -40,6 +40,22 @@ function normalizeResults(items) {
   }).slice(0, 10);
 }
 
+export function rankWebResults(items, query) {
+  const text = query.toLowerCase();
+  const ignored = new Set(['a', 'an', 'the', 'and', 'or', 'for', 'to', 'me', 'find', 'please', 'tool', 'tools']);
+  const terms = (text.match(/[a-z\d]+/g) || []).filter(term => !ignored.has(term));
+  for (const segment of text.match(/[\u3400-\u9fff]+/g) || []) {
+    if (segment.length === 1) terms.push(segment);
+    else for (let index = 0; index < segment.length - 1; index++) terms.push(segment.slice(index, index + 2));
+  }
+  const keywords = [...new Set(terms)].slice(0, 30);
+  const score = item => keywords.reduce((total, term) => total +
+    (item.title.toLowerCase().includes(term) ? 5 : 0) +
+    (item.description.toLowerCase().includes(term) ? 1 : 0) +
+    (item.url.toLowerCase().includes(term) ? 1 : 0), 0);
+  return [...items].sort((left, right) => score(right) - score(left));
+}
+
 export function parseBingRss(xml) {
   if (!/<rss\b/i.test(xml) || !/<channel\b/i.test(xml)) throw new Error('Unexpected search feed');
   const tag = (body, name) => body.match(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)<\\/${name}>`, 'i'))?.[1] || '';
@@ -135,7 +151,7 @@ export function createWebSearchService({ fetchImpl = fetch, ttl = 300_000, timeo
             signal: AbortSignal.timeout(timeoutMs), redirect: 'error'
           });
           if (!response.ok || response.status === 202) { await response.body?.cancel(); continue; }
-          const items = provider.parse(await readSearchBody(response)).slice(0, perPage);
+          const items = rankWebResults(provider.parse(await readSearchBody(response)), query).slice(0, perPage);
           const result = { query, source: 'web', provider: provider.name, searchQuery: provider.searchQuery,
             totalCount: null, page: 1, perPage, hasMore: false, fetchedAt: new Date().toISOString(), cached: false,
             warnings: provider.searchQuery !== query ? ['Shorter keywords were used to find relevant web pages.'] : [], items };
