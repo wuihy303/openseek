@@ -39,7 +39,7 @@ export function buildSearchPlan(input) {
   else if (terms.includes('cli') || terms.includes('prompt') || terms.includes('prompts')) retrieval = ['cli', 'prompt'];
   else retrieval = terms.filter(term => term !== language).slice(0, 5);
   if (!retrieval.length) retrieval = [language];
-  const suffix = `${languageFilter} in:name,description archived:false`;
+  const suffix = `${languageFilter} in:name,description archived:false is:public`;
   return { query, terms, githubQuery: retrieval.join(' ') + suffix, fallbackQuery: retrieval[0] + suffix, requirements: REQUIREMENTS.filter(item => item.query.test(query)) };
 }
 
@@ -98,11 +98,11 @@ export function createSearchService({ github, ttl = 300_000, maxConcurrent = 4 }
       const warnings = [];
       if (githubQuery !== plan.githubQuery) warnings.push('Broader repository keywords were used because the first search returned no results.');
       if (data.incomplete_results) warnings.push('GitHub returned an incomplete search result set.');
-      const repos = Array.isArray(data.items) ? data.items.filter(repo => safeGitHubUrl(repo.html_url) && repo.owner?.login && repo.name).slice(0, perPage) : [];
+      const repos = Array.isArray(data.items) ? data.items.filter(repo => repo.private !== true && safeGitHubUrl(repo.html_url) && repo.owner?.login && repo.name).slice(0, perPage) : [];
       const items = await Promise.all(repos.map(async repo => {
         let readme = null;
         let readmeError = null;
-        try { readme = await github.readme(repo.owner.login, repo.name); }
+        try { readme = await github.readme(repo.owner.login, repo.name, repo.default_branch); }
         catch (error) { readmeError = error instanceof HttpError ? error.message : 'README could not be loaded.'; }
         const evidence = extractReadmeEvidence(readme, plan.requirements);
         const haystack = `${repo.name} ${repo.description || ''} ${(repo.topics || []).join(' ')} ${readme?.text || ''}`.toLowerCase();
@@ -118,6 +118,8 @@ export function createSearchService({ github, ttl = 300_000, maxConcurrent = 4 }
           readme, readmeError, installation: extractInstallation(readme)
         };
       }));
+      const unavailableReadmes = items.filter(item => !item.readme).length;
+      if (unavailableReadmes) warnings.push(`README sources could not be loaded for ${unavailableReadmes} of ${items.length} repositories. Repository metadata is still available.`);
       items.sort((a, b) => (b.evidence.length * 5 + b.matchedTerms.length) - (a.evidence.length * 5 + a.matchedTerms.length));
       const result = { query: plan.query, githubQuery, source: 'github', mode: 'keyword',
         totalCount: Number(data.total_count) || 0, page, perPage,

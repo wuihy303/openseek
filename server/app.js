@@ -48,7 +48,7 @@ export function createApp({ search, staticDir = DEFAULT_STATIC, rateLimit = 20, 
     try {
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname === '/api/health' && req.method === 'GET') {
-        send(res, 200, { status: 'ok', service: 'openseek', version: '1.0.0' }); return;
+        send(res, 200, { status: 'ok', service: 'openseek', version: '1.0.1' }); return;
       }
       if (url.pathname === '/api/search') {
         if (!['GET', 'POST'].includes(req.method)) { res.setHeader('Allow', 'GET, POST'); throw new HttpError(405, 'Use GET or POST.'); }

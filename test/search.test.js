@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { buildSearchPlan, extractReadmeEvidence, extractInstallation, createSearchService } from '../server/search.js';
 import { HttpError, TtlCache } from '../server/cache.js';
 
-const repo = { id: 1, name: 'reader', owner: { login: 'owner' }, html_url: 'https://github.com/owner/reader', description: 'Markdown editor', language: 'TypeScript', stargazers_count: 123, pushed_at: '2026-01-01T00:00:00Z', topics: ['markdown'] };
+const repo = { id: 1, name: 'reader', owner: { login: 'owner' }, private: false, default_branch: 'main', html_url: 'https://github.com/owner/reader', description: 'Markdown editor', language: 'TypeScript', stargazers_count: 123, pushed_at: '2026-01-01T00:00:00Z', topics: ['markdown'] };
 const readme = { text: '# Reader\nWorks offline.\n## Installation\n```sh\nnpm install reader\n```\n', path: 'README.md', htmlUrl: 'https://github.com/owner/reader/blob/main/README.md', truncated: false };
 
 test('Chinese query produces useful repository keywords and retains requirements', () => {
@@ -48,7 +48,7 @@ test('real metadata is mapped, README evidence extracted, and repeated queries c
   let searches = 0;
   const service = createSearchService({ github: {
     async search() { searches++; return { total_count: 12, items: [repo] }; },
-    async readme() { return readme; }
+    async readme(owner, name, branch) { assert.equal(branch, 'main'); return readme; }
   } });
   const result = await service({ query: 'offline markdown editor' });
   assert.equal(result.items[0].stars, 123);
@@ -65,6 +65,7 @@ test('missing README preserves search results and does not fabricate evidence', 
   assert.equal(result.items[0].readme, null);
   assert.deepEqual(result.items[0].evidence, []);
   assert.match(result.items[0].readmeError, /missing/);
+  assert.match(result.warnings[0], /README sources could not be loaded/);
 });
 
 test('empty query result uses a documented broader fallback', async () => {
@@ -107,4 +108,13 @@ test('repositories with matching README statements rank before metadata-only mat
     async readme(owner, name) { return name === 'reader' ? { ...readme, text: '# Markdown editor' } : readme; }
   } });
   assert.equal((await service({ query: 'offline markdown editor' })).items[0].name, 'offline-editor');
+});
+
+test('searches always constrain public visibility and filter unexpected private results', async () => {
+  assert.match(buildSearchPlan('markdown editor').githubQuery, /\bis:public\b/);
+  const service = createSearchService({ github: {
+    async search(query) { assert.match(query, /\bis:public\b/); return { total_count: 1, items: [{ ...repo, private: true }] }; },
+    async readme() { assert.fail('Private README must never be fetched'); }
+  } });
+  assert.deepEqual((await service({ query: 'markdown editor' })).items, []);
 });

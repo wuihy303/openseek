@@ -21,6 +21,7 @@ npm start
 - 真实 GitHub 仓库搜索：描述、语言、Star 数、最近推送时间、真实仓库链接。
 - 中英文关键词处理与语言限定；常见中文领域词映射为英文关键词。
 - README 原文获取、能力关键词定位，附文件名、行号和 GitHub 原文链接。
+- README API 被限流时，自动读取公开仓库默认分支的原始 README；备用请求不携带 GitHub Token。
 - 从 README 安装/快速开始章节提取命令块，供查看和复制。
 - 当前页按 README 匹配与关键词相关度排序，支持翻页。
 - 5 分钟内存缓存、并发请求去重、搜索并发上限和按客户端地址限流。
@@ -43,7 +44,7 @@ npm start
 应用存活检查，不会调用 GitHub：
 
 ```json
-{"status":"ok","service":"openseek","version":"1.0.0"}
+{"status":"ok","service":"openseek","version":"1.0.1"}
 ```
 
 ### `POST /api/search`
