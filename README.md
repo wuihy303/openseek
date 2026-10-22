@@ -7,7 +7,7 @@
 需要 **Node.js 24 或以上**，无第三方运行依赖。
 
 ```sh
-git clone https://github.com/wuihy303/openseek.git
+git clone https://github.com/wuihy303/hack.git openseek
 cd openseek
 npm ci
 cp .env.example .env
