@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Find open-source tools by describing what you need, in English or 中文. Search real GitHub repositories with source-linked README evidence.">
+  <meta name="description" content="Search GitHub projects, web pages and online tools in English or 中文. Find useful resources and open their original sources.">
   <title>OpenSeek — Find exactly what you need.</title>
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
-  <script src="./theme.js"></script>
+  <script src="./theme.js?v=1.1.0"></script>
   <link rel="stylesheet" href="./assets/instrument-serif.css">
   <link rel="stylesheet" href="./assets/ibm-plex-sans.css">
-  <link rel="stylesheet" href="./styles.css">
-  <script src="./app.js" defer></script>
+  <link rel="stylesheet" href="./styles.css?v=1.1.0">
+  <script src="./app.js?v=1.1.0" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to main content</a>
@@ -33,6 +33,10 @@
     </section>
 
     <div class="search-area">
+      <div class="source-switch" role="group" aria-label="选择搜索范围">
+        <button type="button" data-source="github" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5 2 12l6 7m8-14 6 7-6 7M14 3l-4 18"/></svg>GitHub 项目</button>
+        <button type="button" data-source="web" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"/></svg>网页与在线工具</button>
+      </div>
       <form class="search-form" id="search-form" role="search" aria-label="Find open-source tools">
         <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="7"/><path d="m16 16 4.2 4.2"/></svg>
         <label class="sr-only" for="search-input">Search query / 描述你需要的开源工具</label>
@@ -40,10 +44,14 @@
         <button type="submit" id="search-button" disabled>Search</button>
       </form>
       <div class="suggestions" id="suggestions" role="group" aria-label="Try a suggested search">
-        <button type="button" data-suggestion="A self-hosted analytics tool without cookies">A self-hosted analytics tool without cookies</button>
-        <button type="button" data-suggestion="Python library to extract tables from PDF">Python library to extract tables from PDF</button>
-        <button type="button" data-suggestion="支持离线使用的 Markdown 编辑器">支持离线使用的 Markdown 编辑器</button>
-        <button type="button" data-suggestion="Rust toolkit for interactive CLI prompts">Rust toolkit for interactive CLI prompts</button>
+        <button type="button" data-suggestion="A self-hosted analytics tool without cookies" data-suggestion-source="github">A self-hosted analytics tool without cookies</button>
+        <button type="button" data-suggestion="Python library to extract tables from PDF" data-suggestion-source="github">Python library to extract tables from PDF</button>
+        <button type="button" data-suggestion="支持离线使用的 Markdown 编辑器" data-suggestion-source="github">支持离线使用的 Markdown 编辑器</button>
+        <button type="button" data-suggestion="Rust toolkit for interactive CLI prompts" data-suggestion-source="github">Rust toolkit for interactive CLI prompts</button>
+        <button type="button" data-suggestion="图片压缩" data-suggestion-source="web" hidden>图片压缩工具</button>
+        <button type="button" data-suggestion="online markdown editor" data-suggestion-source="web" hidden>在线 Markdown 编辑器</button>
+        <button type="button" data-suggestion="PDF to Word online" data-suggestion-source="web" hidden>在线 PDF 转 Word</button>
+        <button type="button" data-suggestion="royalty free images" data-suggestion-source="web" hidden>免费图片素材网站</button>
       </div>
     </div>
 
@@ -84,6 +92,14 @@
         <section class="unverified"><h4>Not established</h4><ul></ul></section>
       </div>
       <details class="readme-details"><summary>README &amp; installation sources <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="readme-content"><div class="readme-block"><div class="code-heading"><h4>README excerpt <span>· source text</span></h4><button type="button" class="copy-button" data-copy="readme" aria-label="Copy README excerpt">Copy</button></div><pre><code class="readme-code"></code></pre></div><div class="readme-block"><div class="code-heading"><h4>Install <span>· quoted, not executed</span></h4><button type="button" class="copy-button" data-copy="install" aria-label="Copy installation snippet">Copy</button></div><pre><code class="install-code"></code></pre></div></div></details>
+    </article>
+  </template>
+  <template id="web-result-template">
+    <article class="result-card web-card">
+      <div class="web-site-heading"><span class="website-monogram" aria-hidden="true"></span><div><div class="website-domain"></div><span class="web-result-type">网页 · Web page</span></div><span class="result-rank web-rank"></span></div>
+      <h3><a class="website-title" target="_blank" rel="noopener noreferrer"></a></h3>
+      <p class="website-description"></p>
+      <div class="web-card-footer"><span class="web-provider"></span><a class="web-open" target="_blank" rel="noopener noreferrer">打开网页 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></a></div>
     </article>
   </template>
 </body>

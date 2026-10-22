@@ -21,11 +21,15 @@ const REQUIREMENTS = [
   { label: 'OCR', query: /\bocr\b|扫描/i, evidence: /\bocr\b/i }
 ];
 
-export function buildSearchPlan(input) {
+export function validateQuery(input) {
   if (typeof input !== 'string' || input.trim().length < 2 || input.trim().length > 500 || /[\x00-\x1f]/.test(input)) {
     throw new HttpError(400, 'Search query must contain 2–500 characters without control characters.', { code: 'INVALID_QUERY' });
   }
-  const query = input.trim();
+  return input.trim();
+}
+
+export function buildSearchPlan(input) {
+  const query = validateQuery(input);
   let normalized = query.toLowerCase();
   TRANSLATIONS.forEach(([pattern, value]) => { normalized = normalized.replace(pattern, value); });
   const terms = [...new Set((normalized.match(/[a-z0-9]+(?:-[a-z0-9]+)*|[\u3400-\u9fff]{2,}/g) || []).filter(term => !STOP.has(term)))].slice(0, 12);

@@ -8,6 +8,46 @@
   let requestId = 0;
   let currentQuery = '';
   let currentPage = 1;
+  let currentSource = 'github';
+
+  function updateMode(source) {
+    currentSource = source;
+    const web = source === 'web';
+    document.querySelectorAll('[data-source]').forEach(choice => choice.setAttribute('aria-pressed', String(choice.dataset.source === source)));
+    document.querySelectorAll('[data-suggestion]').forEach(suggestion => { suggestion.hidden = suggestion.dataset.suggestionSource !== source; });
+    $('#intro p').textContent = web ? '搜索有用的网页、网站和在线工具，中英文都可以。' : "Describe the open-source tool you're looking for — in English or 中文.";
+    input.placeholder = web ? '搜索网页与在线工具… / Search websites and tools…' : 'Describe the tool you need… / 描述你需要的开源工具…';
+    $('label[for="search-input"]').textContent = web ? '搜索网页与在线工具' : 'Search query / 描述你需要的开源工具';
+    $('#search-form').setAttribute('aria-label', web ? '搜索网页与在线工具' : 'Find open-source tools');
+    button.textContent = web ? '搜索' : 'Search';
+    $('#loading-state h3').textContent = web ? '正在搜索网页…' : 'Looking through GitHub…';
+    $('#loading-state p').textContent = web ? '查找网页、网站和可以直接使用的在线工具。' : 'Finding repositories and reading their documentation.';
+    $('#empty-state h3').textContent = web ? '暂时没有找到相关网页' : 'No matching repositories found.';
+    $('#empty-state p').textContent = web ? '换一些更具体的关键词试试，例如“图片压缩”或“Markdown editor”。' : 'Try a shorter description or use the main tool category. You can search in English or use supported Chinese keywords.';
+    $('.results-note').textContent = web ? '摘要来自搜索结果，请打开原网页确认具体功能和使用条件。' : 'README mentions are text matches, not runtime verification. Installation snippets are quoted from the repository and are never executed.';
+  }
+
+  function createWebCard(item, index, provider) {
+    let href;
+    try {
+      const url = new URL(item.url);
+      if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return null;
+      href = url.href;
+    } catch { return null; }
+    const card = $('#web-result-template').content.firstElementChild.cloneNode(true);
+    const domain = new URL(href).hostname.replace(/^www\./, '');
+    card.querySelector('.website-monogram').textContent = domain.charAt(0).toUpperCase();
+    card.querySelector('.website-domain').textContent = domain;
+    card.querySelector('.result-rank').textContent = `#${index + 1}`;
+    const title = card.querySelector('.website-title');
+    title.textContent = item.title;
+    title.href = href;
+    card.querySelector('.website-description').textContent = item.description || '搜索结果未提供摘要，可打开原网页查看。';
+    card.querySelector('.web-open').href = href;
+    card.querySelector('.web-open').setAttribute('aria-label', `打开网页：${item.title}`);
+    card.querySelector('.web-provider').textContent = `搜索来源：${provider}`;
+    return card;
+  }
 
   function safeLink(value) {
     try {
@@ -89,11 +129,13 @@
 
   function syncInput() { button.disabled = input.value.trim().length < 2; }
 
-  async function renderSearch(query, page = 1, focus = false) {
+  async function renderSearch(query, page = 1, focus = false, source = currentSource) {
     controller?.abort();
     const id = ++requestId;
     currentQuery = query;
     currentPage = page;
+    updateMode(source);
+    const web = source === 'web';
     input.value = query;
     syncInput();
     const active = Boolean(query);
@@ -110,11 +152,11 @@
       return;
     }
     document.title = `${query} — OpenSeek`;
-    $('#results-heading').textContent = 'Searching GitHub…';
-    $('#source-badge').textContent = 'GitHub · keyword search';
+    $('#results-heading').textContent = web ? '正在搜索网页…' : 'Searching GitHub…';
+    $('#source-badge').textContent = web ? '网页与在线工具' : 'GitHub · keyword search';
     $('#loading-state').hidden = false;
     $('#results-section').setAttribute('aria-busy', 'true');
-    $('#search-status').textContent = 'Searching GitHub and reading repository documentation.';
+    $('#search-status').textContent = web ? '正在搜索网页和在线工具。' : 'Searching GitHub and reading repository documentation.';
     if (focus) $('#results-heading').focus({ preventScroll: true });
     const activeController = new AbortController();
     controller = activeController;
@@ -122,23 +164,24 @@
     try {
       const response = await fetch('/api/search', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, page, perPage: 5 }), signal: activeController.signal
+        body: JSON.stringify({ query, page, perPage: web ? 10 : 5, source }), signal: activeController.signal
       });
       const data = await response.json();
       if (id !== requestId) return;
       if (!response.ok) throw new Error(data.error?.message || 'Search is temporarily unavailable.');
-      $('#results-heading').textContent = `${data.items.length} results · ${new Intl.NumberFormat().format(data.totalCount)} repositories found`;
-      $('#source-badge').textContent = data.cached ? 'GitHub · cached data' : 'GitHub · live data';
-      list.append(...data.items.map(createCard));
+      if (web && data.source !== 'web') throw new Error('The server has not enabled web search yet. Please reload after deployment.');
+      $('#results-heading').textContent = web ? `${data.items.length} 个网页与在线工具` : `${data.items.length} results · ${new Intl.NumberFormat().format(data.totalCount)} repositories found`;
+      $('#source-badge').textContent = web ? `${data.provider} · ${data.cached ? '缓存结果' : '网页搜索'}` : data.cached ? 'GitHub · cached data' : 'GitHub · live data';
+      list.append(...(web ? data.items.map((item, index) => createWebCard(item, index, data.provider)).filter(Boolean) : data.items.map(createCard)));
       $('#empty-state').hidden = data.items.length > 0;
-      $('#query-summary').textContent = `Search keywords: ${data.githubQuery}`;
+      $('#query-summary').textContent = web ? `搜索关键词：${data.searchQuery}` : `Search keywords: ${data.githubQuery}`;
       $('#query-summary').hidden = false;
       if (data.warnings.length) { $('#search-warning').textContent = data.warnings.join(' '); $('#search-warning').hidden = false; }
       $('#previous-page').disabled = page <= 1;
       $('#next-page').disabled = !data.hasMore;
       $('#page-label').textContent = `Page ${page}`;
-      $('#pagination').hidden = page <= 1 && !data.hasMore;
-      $('#search-status').textContent = `${data.items.length} repositories displayed. README mentions are source text matches, not runtime verification.`;
+      $('#pagination').hidden = web || (page <= 1 && !data.hasMore);
+      $('#search-status').textContent = web ? `已找到 ${data.items.length} 个网页，可打开原站查看。` : `${data.items.length} repositories displayed. README mentions are source text matches, not runtime verification.`;
     } catch (error) {
       if (id !== requestId) return;
       $('#results-heading').textContent = 'Search unavailable';
@@ -151,29 +194,38 @@
     }
   }
 
-  function navigate(query, page = 1) {
+  function navigate(query, page = 1, source = currentSource) {
     const url = new URL(location.href);
+    if (source === 'web') { url.searchParams.set('source', 'web'); page = 1; } else url.searchParams.delete('source');
     if (query) url.searchParams.set('q', query); else url.searchParams.delete('q');
     if (page > 1) url.searchParams.set('page', String(page)); else url.searchParams.delete('page');
     if (url.href !== location.href) history.pushState(null, '', url);
-    renderSearch(query, page, Boolean(query));
+    renderSearch(query, page, Boolean(query), source);
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
   function readLocation() {
     const params = new URL(location.href).searchParams;
     const page = Number(params.get('page') || 1);
-    return { query: (params.get('q') || '').trim(), page: Number.isInteger(page) && page >= 1 && page <= 10 ? page : 1 };
+    const source = params.get('source') === 'web' ? 'web' : 'github';
+    return { query: (params.get('q') || '').trim(), page: source === 'github' && Number.isInteger(page) && page >= 1 && page <= 10 ? page : 1, source };
   }
   $('#search-form').addEventListener('submit', event => { event.preventDefault(); const query = input.value.trim(); if (query.length >= 2) navigate(query); });
   input.addEventListener('input', syncInput);
   document.querySelectorAll('[data-suggestion]').forEach(suggestion => suggestion.addEventListener('click', () => navigate(suggestion.dataset.suggestion)));
+  document.querySelectorAll('[data-source]').forEach(choice => choice.addEventListener('click', () => {
+    if (choice.dataset.source === currentSource) return;
+    const draft = input.value;
+    const query = currentQuery && draft.trim().length >= 2 ? draft.trim() : '';
+    navigate(query, 1, choice.dataset.source);
+    if (!query) { input.value = draft; syncInput(); }
+  }));
   function home() { navigate(''); input.focus(); }
   $('#home-button').addEventListener('click', home);
   $('#try-another').addEventListener('click', home);
   $('#retry-search').addEventListener('click', () => renderSearch(currentQuery, currentPage));
   $('#previous-page').addEventListener('click', () => navigate(currentQuery, currentPage - 1));
   $('#next-page').addEventListener('click', () => navigate(currentQuery, currentPage + 1));
-  window.addEventListener('popstate', () => { const state = readLocation(); renderSearch(state.query, state.page); });
+  window.addEventListener('popstate', () => { const state = readLocation(); renderSearch(state.query, state.page, false, state.source); });
 
   const theme = $('#theme-toggle');
   function updateThemeButton() {
@@ -206,5 +258,5 @@
   }
   updateThemeButton();
   const initial = readLocation();
-  renderSearch(initial.query, initial.page);
+  renderSearch(initial.query, initial.page, false, initial.source);
 })();

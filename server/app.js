@@ -23,7 +23,7 @@ async function jsonBody(req) {
   catch { throw new HttpError(400, 'Request body must be valid JSON.', { code: 'INVALID_JSON' }); }
 }
 
-export function createApp({ search, staticDir = DEFAULT_STATIC, rateLimit = 20, now = Date.now } = {}) {
+export function createApp({ search, webSearch, staticDir = DEFAULT_STATIC, rateLimit = 20, now = Date.now } = {}) {
   const clients = new Map();
   const root = path.resolve(staticDir);
   function send(res, status, data) {
@@ -48,7 +48,7 @@ export function createApp({ search, staticDir = DEFAULT_STATIC, rateLimit = 20, 
     try {
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname === '/api/health' && req.method === 'GET') {
-        send(res, 200, { status: 'ok', service: 'openseek', version: '1.0.1' }); return;
+        send(res, 200, { status: 'ok', service: 'openseek', version: '1.1.0' }); return;
       }
       if (url.pathname === '/api/search') {
         if (!['GET', 'POST'].includes(req.method)) { res.setHeader('Allow', 'GET, POST'); throw new HttpError(405, 'Use GET or POST.'); }
@@ -61,7 +61,11 @@ export function createApp({ search, staticDir = DEFAULT_STATIC, rateLimit = 20, 
         limit(req);
         const input = req.method === 'POST' ? await jsonBody(req) : Object.fromEntries(url.searchParams);
         if (!input || typeof input !== 'object' || Array.isArray(input)) throw new HttpError(400, 'Expected a JSON object.');
-        const result = await search({ query: input.query ?? input.q, page: input.page === undefined ? 1 : Number(input.page), perPage: input.perPage === undefined ? 5 : Number(input.perPage) });
+        const source = input.source ?? 'github';
+        if (!['github', 'web'].includes(source)) throw new HttpError(400, 'source must be github or web.', { code: 'INVALID_SOURCE' });
+        const handler = source === 'web' ? webSearch : search;
+        if (!handler) throw new HttpError(503, 'This search source is not configured.', { code: 'SEARCH_UNAVAILABLE' });
+        const result = await handler({ query: input.query ?? input.q, page: input.page === undefined ? 1 : Number(input.page), perPage: input.perPage === undefined ? source === 'web' ? 10 : 5 : Number(input.perPage) });
         send(res, 200, result); return;
       }
       if (url.pathname.startsWith('/api/')) throw new HttpError(404, 'API endpoint not found.');

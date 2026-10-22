@@ -67,3 +67,26 @@ test('upstream failures retain structured codes and retry hints', async t => {
   assert.equal(response.headers.get('retry-after'), '30');
   assert.equal((await response.json()).error.code, 'GITHUB_RATE_LIMIT');
 });
+
+test('web searches dispatch to the web service and preserve GitHub as the default', async t => {
+  const url = await serve(t, { webSearch: async input => {
+    assert.equal(input.page, 1);
+    assert.equal(input.perPage, 10);
+    return { source: 'web', query: input.query, items: [] };
+  } });
+  assert.equal((await (await post(url, { query: 'image compressor', source: 'web' })).json()).source, 'web');
+  assert.equal((await (await fetch(url + '/api/search?q=markdown&source=web')).json()).source, 'web');
+  assert.equal((await (await post(url, { query: 'markdown' })).json()).query, 'markdown');
+});
+
+test('unknown and unconfigured search sources are rejected clearly', async t => {
+  const url = await serve(t);
+  assert.equal((await post(url, { query: 'markdown', source: 'unknown' })).status, 400);
+  assert.equal((await post(url, { query: 'markdown', source: 'web' })).status, 503);
+});
+
+test('switching search sources does not reset the per-client rate limit', async t => {
+  const url = await serve(t, { rateLimit: 1, webSearch: async () => ({ source: 'web', items: [] }) });
+  assert.equal((await post(url, { query: 'markdown' })).status, 200);
+  assert.equal((await post(url, { query: 'images', source: 'web' })).status, 429);
+});

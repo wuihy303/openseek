@@ -1,6 +1,6 @@
 # OpenSeek
 
-中英文开源工具检索应用。Node.js 后端调用真实 GitHub API，前端展示仓库数据、README 原文证据与安装片段。
+中英文项目、网页与在线工具检索应用。可切换 GitHub 项目搜索和网页搜索，直接查看来源并打开原站。
 
 ## 快速运行
 
@@ -14,11 +14,13 @@ npm start
 
 访问 <http://localhost:3000>。开发时使用 `npm run dev` 自动重启后端。
 
-不配置 Token 也可以搜索公开仓库。GitHub 匿名 API 配额较低，长期运行建议在服务器 `.env` 中设置 `GITHUB_TOKEN`。它只用于查询公开仓库及 README，不需要仓库写入权限。不要把 `.env` 提交到 GitHub。
+不配置 Token 也可以搜索公开仓库和网页。GitHub 匿名 API 配额较低，长期运行建议在服务器 `.env` 中设置 `GITHUB_TOKEN`。它只用于查询公开仓库及 README，不需要仓库写入权限。不要把 `.env` 提交到 GitHub。
 
 ## 已实现
 
 - 真实 GitHub 仓库搜索：描述、语言、Star 数、最近推送时间、真实仓库链接。
+- 网页与在线工具搜索：标题、摘要、域名、搜索来源及原网页链接；支持中英文。
+- 两种搜索范围可切换，分享链接保留搜索范围和关键词；旧链接默认继续搜索 GitHub。
 - 中英文关键词处理与语言限定；常见中文领域词映射为英文关键词。
 - README 原文获取、能力关键词定位，附文件名、行号和 GitHub 原文链接。
 - README API 被限流时，自动读取公开仓库默认分支的原始 README；备用请求不携带 GitHub Token。
@@ -31,7 +33,11 @@ npm start
 
 ## 能力边界
 
-这不是大模型语义搜索：检索使用规则化关键词和 GitHub 搜索，中文词表可在 `server/search.js` 扩展。排序在 GitHub 返回的当前页候选中进行。
+这不是大模型语义搜索：GitHub 检索使用规则化关键词和 GitHub 搜索，中文词表可在 `server/search.js` 扩展。仓库排序在 GitHub 返回的当前页候选中进行。
+
+网页搜索读取 DuckDuckGo 的公共搜索结果，不可用时尝试 Bing RSS；备用搜索可能缩短关键词，界面会显示实际检索词。无需额外的搜索 API 密钥，公共来源不可用时会明确返回错误。摘要来自搜索结果，不代表已验证网站功能。服务器不抓取搜索结果指向的任意网站。
+
+网页模式最多显示 10 条结果，当前不提供翻页或全网结果总数；GitHub 模式继续支持分页。
 
 “README mentions”表示文档中找到相关措辞，附原文供核对，不代表实际运行验证。未找到原文也不代表项目一定不支持该能力。安装代码仅摘录展示，应用不会执行它。
 
@@ -44,7 +50,7 @@ npm start
 应用存活检查，不会调用 GitHub：
 
 ```json
-{"status":"ok","service":"openseek","version":"1.0.1"}
+{"status":"ok","service":"openseek","version":"1.1.0"}
 ```
 
 ### `POST /api/search`
@@ -57,15 +63,28 @@ curl -X POST http://localhost:3000/api/search \
 
 同时支持 `GET /api/search?q=markdown%20editor&page=1&perPage=5`。
 
+网页搜索示例：
+
+```sh
+curl -X POST http://localhost:3000/api/search \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"图片压缩","source":"web","perPage":10}'
+```
+
+也可直接访问 `/?source=web` 打开网页搜索首页。
+
 参数：
 
 | 字段 | 说明 |
 | --- | --- |
 | `query` / `q` | 必填，去除首尾空白后 2–500 字符 |
-| `page` | 1–10，默认 1 |
-| `perPage` | 1–10，默认 5 |
+| `source` | `github`（默认）或 `web` |
+| `page` | GitHub：1–10；网页：只能为 1。默认 1 |
+| `perPage` | 1–10；GitHub 默认 5，网页默认 10 |
 
-返回包括 `items`、`totalCount`、`hasMore`、`githubQuery`、`fetchedAt`、`cached` 和 `warnings`。仓库项含 `owner`、`name`、`htmlUrl`、`stars`、`language`、`updatedAt`、`matchedTerms`、`evidence`、`unverified`、`readme`、`readmeError`、`installation`。
+GitHub 返回包括 `items`、`totalCount`、`hasMore`、`githubQuery`、`fetchedAt`、`cached` 和 `warnings`。仓库项含 `owner`、`name`、`htmlUrl`、`stars`、`language`、`updatedAt`、`matchedTerms`、`evidence`、`unverified`、`readme`、`readmeError`、`installation`。
+
+网页返回 `source: "web"`、`provider`、`searchQuery` 和 `items`。每个结果包含 `title`、`url`、`domain`、`description`；`totalCount` 为 `null`，`hasMore` 为 `false`，不编造全网结果总数。
 
 README 获取失败时保留仓库元数据，返回 `readmeError`；不会填入演示数据。`evidence` 包含匹配行原文、行号和来源链接。`installation` 没有匹配片段时为 `null`。
 
@@ -86,7 +105,8 @@ README 获取失败时保留仓库元数据，返回 `readmeError`；不会填�
 | `GITHUB_TOKEN` | 无 | 可选，服务端 GitHub API Token |
 | `SEARCH_RATE_LIMIT` | `20` | 每个连接地址每分钟搜索次数 |
 | `CACHE_TTL_SECONDS` | `300` | 缓存秒数 |
-| `GITHUB_TIMEOUT_MS` | `10000` | 单个上游请求超时毫秒数 |
+| `GITHUB_TIMEOUT_MS` | `10000` | 单个 GitHub 请求超时毫秒数 |
+| `WEB_SEARCH_TIMEOUT_MS` | `10000` | 单个网页搜索来源的超时毫秒数 |
 | `NODE_USE_ENV_PROXY` | 未设置 | 需要继承 `HTTP_PROXY` / `HTTPS_PROXY` 时设为 `1` |
 
 应用不向浏览器返回 Token。前端只向同源 `/api/search` 发送请求，不需要在 JavaScript 中配置密钥。
@@ -98,7 +118,7 @@ npm run check
 npm test
 ```
 
-测试使用隔离的 GitHub 响应，覆盖请求验证、真实数据映射、README 证据与安装提取、缓存和去重、并发限制、限流、上游错误、分页及静态文件边界。运行测试不消耗 GitHub API 配额。
+测试使用隔离的来源响应，覆盖请求验证、搜索来源切换、网页结果解析与来源回退、真实数据映射、README 证据与安装提取、缓存和去重、并发限制、限流、上游错误、分页及静态文件边界。运行测试不消耗外部搜索配额。
 
 ## 部署
 

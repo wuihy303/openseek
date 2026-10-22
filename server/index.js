@@ -1,6 +1,7 @@
 import { createGitHubClient } from './github.js';
 import { createSearchService } from './search.js';
 import { createApp } from './app.js';
+import { createWebSearchService } from './web-search.js';
 
 function integer(name, fallback, min, max) {
   const value = process.env[name] === undefined ? fallback : Number(process.env[name]);
@@ -12,7 +13,8 @@ const port = integer('PORT', 3000, 1, 65535);
 const ttl = integer('CACHE_TTL_SECONDS', 300, 1, 3600) * 1000;
 const github = createGitHubClient({ token: process.env.GITHUB_TOKEN || '', ttl, timeoutMs: integer('GITHUB_TIMEOUT_MS', 10_000, 1000, 30_000) });
 const search = createSearchService({ github, ttl });
-const server = createApp({ search, rateLimit: integer('SEARCH_RATE_LIMIT', 20, 1, 1000) });
+const webSearch = createWebSearchService({ ttl, timeoutMs: integer('WEB_SEARCH_TIMEOUT_MS', 10_000, 1000, 15_000) });
+const server = createApp({ search, webSearch, rateLimit: integer('SEARCH_RATE_LIMIT', 20, 1, 1000) });
 server.requestTimeout = 30_000;
 server.headersTimeout = 15_000;
 server.listen(port, process.env.HOST || '0.0.0.0', () => {
