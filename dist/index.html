@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Find open-source tools by describing what you need, in English or 中文. Search real GitHub repositories with source-linked README evidence.">
+  <title>OpenSeek — Find exactly what you need.</title>
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+  <script src="./theme.js"></script>
+  <link rel="stylesheet" href="./assets/instrument-serif.css">
+  <link rel="stylesheet" href="./assets/ibm-plex-sans.css">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <button class="brand" id="home-button" aria-label="OpenSeek home">
+      <span class="brand-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="5.8"/><path d="m15 15 4 4"/></svg></span>
+      <span>OpenSeek</span>
+    </button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Switch to dark mode" title="Switch to dark mode">
+      <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.9 13.1A8.6 8.6 0 0 1 10.9 3a8.6 8.6 0 1 0 10 10.1Z"/></svg>
+      <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4m0-14.2-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>
+    </button>
+  </header>
+
+  <main id="main" class="main-content">
+    <section class="intro" id="intro" aria-labelledby="page-heading">
+      <h1 id="page-heading">Find exactly what you need.</h1>
+      <p>Describe the open-source tool you're looking for — in English or 中文.</p>
+    </section>
+
+    <div class="search-area">
+      <form class="search-form" id="search-form" role="search" aria-label="Find open-source tools">
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="7"/><path d="m16 16 4.2 4.2"/></svg>
+        <label class="sr-only" for="search-input">Search query / 描述你需要的开源工具</label>
+        <input id="search-input" name="q" type="search" autocomplete="off" maxlength="500" placeholder="Describe the tool you need… / 描述你需要的开源工具…" enterkeyhint="search" required>
+        <button type="submit" id="search-button" disabled>Search</button>
+      </form>
+      <div class="suggestions" id="suggestions" role="group" aria-label="Try a suggested search">
+        <button type="button" data-suggestion="A self-hosted analytics tool without cookies">A self-hosted analytics tool without cookies</button>
+        <button type="button" data-suggestion="Python library to extract tables from PDF">Python library to extract tables from PDF</button>
+        <button type="button" data-suggestion="支持离线使用的 Markdown 编辑器">支持离线使用的 Markdown 编辑器</button>
+        <button type="button" data-suggestion="Rust toolkit for interactive CLI prompts">Rust toolkit for interactive CLI prompts</button>
+      </div>
+    </div>
+
+    <section class="results-section" id="results-section" aria-labelledby="results-heading" hidden>
+      <div class="results-toolbar">
+        <h2 id="results-heading" tabindex="-1">Search results</h2>
+        <span class="source-badge" id="source-badge">GitHub · live data</span>
+      </div>
+      <div class="loading-state" id="loading-state" role="status" hidden><span class="spinner" aria-hidden="true"></span><h3>Looking through GitHub…</h3><p>Finding repositories and reading their documentation.</p></div>
+      <div class="error-state" id="error-state" role="alert" hidden><h3>Search could not be completed.</h3><p id="error-message"></p><button class="secondary-button" id="retry-search">Try again</button></div>
+      <p class="search-warning" id="search-warning" hidden></p>
+      <p class="query-summary" id="query-summary" hidden></p>
+      <div class="result-list" id="result-list"></div>
+      <div class="empty-state" id="empty-state" hidden>
+        <span class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span>
+        <h3>No matching repositories found.</h3>
+        <p>Try a shorter description or use the main tool category.<br>You can search in English or use supported Chinese keywords.</p>
+        <button class="secondary-button" id="try-another">Try a suggested search <span aria-hidden="true">↗</span></button>
+      </div>
+      <nav class="pagination" id="pagination" aria-label="Search result pages" hidden><button class="secondary-button" id="previous-page">← Previous</button><span id="page-label"></span><button class="secondary-button" id="next-page">Next →</button></nav>
+      <p class="results-note">README mentions are text matches, not runtime verification. Installation snippets are quoted from the repository and are never executed.</p>
+    </section>
+    <p class="sr-only" id="search-status" role="status" aria-live="polite" aria-atomic="true"></p>
+  </main>
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <template id="result-template">
+    <article class="result-card">
+      <div class="card-topline">
+        <div class="repository-heading"><div class="rank-row"><span class="result-rank"></span><span class="source-badge">GitHub</span></div><h3><span class="repo-owner"></span><span class="repo-divider"> / </span><span class="repo-name"></span></h3></div>
+        <a class="github-link" target="_blank" rel="noopener noreferrer">GitHub <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14"/><path d="M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/></svg></a>
+      </div>
+      <p class="repo-description"></p>
+      <div class="repo-meta"><span class="language"><i aria-hidden="true"></i><span></span></span><span class="stars"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.3.9-4.5 4.4 1.1 6.2-5.7-3-5.7 3 1.1-6.2L3.2 9.6l6.2-.9Z"/></svg><span></span></span><span class="updated"></span></div>
+      <p class="match-reason"><strong>Why it matches</strong><span> · </span><span class="match-copy"></span></p>
+      <div class="evidence-grid">
+        <section class="verified"><h4>README mentions</h4><ul></ul></section>
+        <section class="unverified"><h4>Not established</h4><ul></ul></section>
+      </div>
+      <details class="readme-details"><summary>README &amp; installation sources <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="readme-content"><div class="readme-block"><div class="code-heading"><h4>README excerpt <span>· source text</span></h4><button type="button" class="copy-button" data-copy="readme" aria-label="Copy README excerpt">Copy</button></div><pre><code class="readme-code"></code></pre></div><div class="readme-block"><div class="code-heading"><h4>Install <span>· quoted, not executed</span></h4><button type="button" class="copy-button" data-copy="install" aria-label="Copy installation snippet">Copy</button></div><pre><code class="install-code"></code></pre></div></div></details>
+    </article>
+  </template>
+</body>
+</html>
