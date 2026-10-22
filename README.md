@@ -4,11 +4,9 @@
 
 ## 快速运行
 
-需要 **Node.js 24 或以上**，无第三方运行依赖。
+需要 **Node.js 24 或以上**，无第三方运行依赖。获取源码后，在项目根目录执行以下命令：
 
 ```sh
-git clone https://github.com/wuihy303/hack.git openseek
-cd openseek
 npm ci
 cp .env.example .env
 npm start
