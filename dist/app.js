@@ -1,3 +1,5 @@
+import { resolveLanguage, normalizeLanguage, translate, localizeFeature, localizeWarning, localizeError } from './i18n.js?v=1.2.0';
+
 (() => {
   'use strict';
   const $ = selector => document.querySelector(selector);
@@ -9,22 +11,55 @@
   let currentQuery = '';
   let currentPage = 1;
   let currentSource = 'github';
+  let savedLanguage;
+  try { savedLanguage = localStorage.getItem('openseek-language'); } catch { /* Storage is optional. */ }
+  let language = resolveLanguage({ query: new URL(location.href).searchParams.get('lang'), saved: savedLanguage, languages: navigator.languages || [navigator.language] });
+  let view = 'home';
+  let lastData = null;
+  let lastErrorCode = null;
+  let toastKey = null;
+  const t = (key, values) => translate(language, key, values);
+  const locale = () => language === 'zh' ? 'zh-CN' : 'en-US';
+
+  function localize(root = document) {
+    root.querySelectorAll('[data-i18n]').forEach(element => { element.textContent = t(element.dataset.i18n); });
+    root.querySelectorAll('[data-i18n-aria-label]').forEach(element => { element.setAttribute('aria-label', t(element.dataset.i18nAriaLabel)); });
+  }
+
+  function applyLanguage(next, remember = false) {
+    language = normalizeLanguage(next) || language;
+    document.documentElement.lang = locale();
+    document.querySelectorAll('[data-language]').forEach(choice => choice.setAttribute('aria-pressed', String(choice.dataset.language === language)));
+    if (remember) {
+      try { localStorage.setItem('openseek-language', language); } catch { /* The switch works without storage. */ }
+      const url = new URL(location.href);
+      url.searchParams.set('lang', language);
+      history.replaceState(null, '', url);
+    }
+    localize();
+    $('meta[name="description"]').content = t('metaDescription');
+    updateMode(currentSource);
+    updateThemeButton();
+    updateView();
+    if (toastKey) $('#toast').textContent = t(toastKey);
+  }
 
   function updateMode(source) {
     currentSource = source;
     const web = source === 'web';
     document.querySelectorAll('[data-source]').forEach(choice => choice.setAttribute('aria-pressed', String(choice.dataset.source === source)));
     document.querySelectorAll('[data-suggestion]').forEach(suggestion => { suggestion.hidden = suggestion.dataset.suggestionSource !== source; });
-    $('#intro p').textContent = web ? '搜索有用的网页、网站和在线工具，中英文都可以。' : "Describe the open-source tool you're looking for — in English or 中文.";
-    input.placeholder = web ? '搜索网页与在线工具… / Search websites and tools…' : 'Describe the tool you need… / 描述你需要的开源工具…';
-    $('label[for="search-input"]').textContent = web ? '搜索网页与在线工具' : 'Search query / 描述你需要的开源工具';
-    $('#search-form').setAttribute('aria-label', web ? '搜索网页与在线工具' : 'Find open-source tools');
-    button.textContent = web ? '搜索' : 'Search';
-    $('#loading-state h3').textContent = web ? '正在搜索网页…' : 'Looking through GitHub…';
-    $('#loading-state p').textContent = web ? '查找网页、网站和可以直接使用的在线工具。' : 'Finding repositories and reading their documentation.';
-    $('#empty-state h3').textContent = web ? '暂时没有找到相关网页' : 'No matching repositories found.';
-    $('#empty-state p').textContent = web ? '换一些更具体的关键词试试，例如“图片压缩”或“Markdown editor”。' : 'Try a shorter description or use the main tool category. You can search in English or use supported Chinese keywords.';
-    $('.results-note').textContent = web ? '摘要来自搜索结果，请打开原网页确认具体功能和使用条件。' : 'README mentions are text matches, not runtime verification. Installation snippets are quoted from the repository and are never executed.';
+    $('#intro p').textContent = t(web ? 'webIntro' : 'githubIntro');
+    input.placeholder = t(web ? 'webPlaceholder' : 'githubPlaceholder');
+    const searchLabel = t(web ? 'webSearchLabel' : 'githubSearchLabel');
+    $('label[for="search-input"]').textContent = searchLabel;
+    $('#search-form').setAttribute('aria-label', searchLabel);
+    button.textContent = t('search');
+    $('#loading-state h3').textContent = t(web ? 'webLoading' : 'githubLoading');
+    $('#loading-state p').textContent = t(web ? 'webLoadingDescription' : 'githubLoadingDescription');
+    $('#empty-state h3').textContent = t(web ? 'webEmpty' : 'githubEmpty');
+    $('#empty-state p').textContent = t(web ? 'webEmptyDescription' : 'githubEmptyDescription');
+    $('.results-note').textContent = t(web ? 'webNote' : 'githubNote');
   }
 
   function createWebCard(item, index, provider) {
@@ -35,6 +70,7 @@
       href = url.href;
     } catch { return null; }
     const card = $('#web-result-template').content.firstElementChild.cloneNode(true);
+    localize(card);
     const domain = new URL(href).hostname.replace(/^www\./, '');
     card.querySelector('.website-monogram').textContent = domain.charAt(0).toUpperCase();
     card.querySelector('.website-domain').textContent = domain;
@@ -42,10 +78,10 @@
     const title = card.querySelector('.website-title');
     title.textContent = item.title;
     title.href = href;
-    card.querySelector('.website-description').textContent = item.description || '搜索结果未提供摘要，可打开原网页查看。';
+    card.querySelector('.website-description').textContent = item.description || t('noWebDescription');
     card.querySelector('.web-open').href = href;
-    card.querySelector('.web-open').setAttribute('aria-label', `打开网页：${item.title}`);
-    card.querySelector('.web-provider').textContent = `搜索来源：${provider}`;
+    card.querySelector('.web-open').setAttribute('aria-label', t('openWebLabel', { title: item.title }));
+    card.querySelector('.web-provider').textContent = t('provider', { provider });
     return card;
   }
 
@@ -89,29 +125,33 @@
 
   function createCard(repo, index) {
     const card = $('#result-template').content.firstElementChild.cloneNode(true);
+    localize(card);
     const set = (selector, text) => { card.querySelector(selector).textContent = text; };
     set('.result-rank', `#${(currentPage - 1) * 5 + index + 1}`);
     set('.repo-owner', repo.owner);
     set('.repo-name', repo.name);
-    set('.repo-description', repo.description);
-    set('.language span', repo.language || 'Not specified');
-    set('.stars span', new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(repo.stars));
+    set('.repo-description', !repo.description || repo.description === 'No repository description provided.' ? t('noDescription') : repo.description);
+    set('.language span', repo.language || t('notSpecified'));
+    set('.stars span', new Intl.NumberFormat(locale(), { notation: 'compact', maximumFractionDigits: 1 }).format(repo.stars));
     const date = new Date(repo.updatedAt);
-    set('.updated', Number.isNaN(date.valueOf()) ? 'Update date unavailable' : `Updated ${date.toLocaleDateString()}`);
-    set('.match-copy', repo.matchReason);
+    set('.updated', Number.isNaN(date.valueOf()) ? t('dateUnavailable') : t('updated', { date: date.toLocaleDateString(locale()) }));
+    set('.match-copy', repo.matchedTerms?.length ? t('matchedKeywords', { terms: repo.matchedTerms.join(language === 'zh' ? '、' : ', ') }) : t('returnedByGithub'));
     const link = card.querySelector('.github-link');
     const href = safeLink(repo.htmlUrl);
     if (href) link.href = href;
     else link.remove();
-    link.setAttribute('aria-label', `View ${repo.owner}/${repo.name} on GitHub`);
+    link.setAttribute('aria-label', t('viewGithub', { repo: `${repo.owner}/${repo.name}` }));
 
     const mentions = card.querySelector('.verified ul');
-    if (repo.evidence.length) mentions.append(...repo.evidence.map(item => evidenceItem(item.label, item, 'check')));
-    else mentions.append(evidenceItem(repo.readme ? 'No requested feature statements matched.' : 'README could not be loaded.'));
-    const missing = repo.unverified.length ? repo.unverified : ['Repository behavior has not been tested.'];
+    if (repo.evidence.length) mentions.append(...repo.evidence.map(item => evidenceItem(localizeFeature(language, item.label), item, 'check')));
+    else mentions.append(evidenceItem(t(repo.readme ? 'noFeatureMatches' : 'readmeUnavailable')));
+    const missing = repo.unverified.length ? repo.unverified.map(text => {
+      const feature = /^No README statement found for: (.+)$/.exec(text);
+      return feature ? t('missingFeature', { feature: localizeFeature(language, feature[1]) }) : t('notTested');
+    }) : [t('notTested')];
     card.querySelector('.unverified ul').append(...missing.map(text => evidenceItem(text)));
-    set('.readme-code', repo.readme ? repo.readme.text.slice(0, 20_000) + (repo.readme.text.length > 20_000 || repo.readme.truncated ? '\n\n[Excerpt truncated. View the full README on GitHub.]' : '') : repo.readmeError || 'No README available.');
-    set('.install-code', repo.installation?.text || 'No installation command block was found in the available README. See the repository documentation.');
+    set('.readme-code', repo.readme ? repo.readme.text.slice(0, 20_000) + (repo.readme.text.length > 20_000 || repo.readme.truncated ? `\n\n${t('excerptTruncated')}` : '') : localizeError(language, repo.readmeErrorCode || 'README_UNAVAILABLE'));
+    set('.install-code', repo.installation?.text || t('noInstall'));
     card.querySelectorAll('[data-copy]').forEach(copy => {
       const text = copy.dataset.copy === 'readme' ? repo.readme?.text.slice(0, 20_000) : repo.installation?.text;
       copy.disabled = !text;
@@ -120,7 +160,7 @@
     if (repo.installation?.url && safeLink(repo.installation.url)) {
       const source = document.createElement('a');
       source.href = repo.installation.url; source.target = '_blank'; source.rel = 'noopener noreferrer';
-      source.textContent = `View installation source · ${repo.installation.source}`;
+      source.textContent = t('installationSource', { source: repo.installation.source });
       source.className = 'installation-source';
       card.querySelector('.readme-content').append(source);
     }
@@ -128,6 +168,56 @@
   }
 
   function syncInput() { button.disabled = input.value.trim().length < 2; }
+
+  function updateView() {
+    const active = view !== 'home';
+    const web = currentSource === 'web';
+    const expanded = [...list.querySelectorAll('.readme-details')].map(details => details.open);
+    $('.main-content').classList.toggle('has-results', active);
+    $('#intro').hidden = active;
+    $('#suggestions').hidden = active;
+    $('#results-section').hidden = !active;
+    for (const selector of ['#loading-state', '#error-state', '#empty-state', '#pagination', '#search-warning', '#query-summary']) $(selector).hidden = true;
+    list.replaceChildren();
+    $('#results-section').removeAttribute('aria-busy');
+    document.title = active ? `${currentQuery} — OpenSeek` : t('pageTitle');
+    $('#results-heading').textContent = t('results');
+    $('#search-status').textContent = '';
+    $('#source-badge').textContent = t(web ? 'webSource' : 'githubKeywords');
+    if (!active) return;
+    if (view === 'loading') {
+      $('#results-heading').textContent = t(web ? 'webLoading' : 'githubLoading');
+      $('#loading-state').hidden = false;
+      $('#results-section').setAttribute('aria-busy', 'true');
+      $('#search-status').textContent = t(web ? 'webSearchingStatus' : 'githubSearchingStatus');
+      return;
+    }
+    if (view === 'error') {
+      $('#results-heading').textContent = t('unavailable');
+      $('#error-message').textContent = localizeError(language, lastErrorCode);
+      $('#error-state').hidden = false;
+      $('#search-status').textContent = $('#error-message').textContent;
+      return;
+    }
+    const data = lastData;
+    const count = data.items.length;
+    $('#results-heading').textContent = t(web ? 'webResults' : 'githubResults', { count, total: new Intl.NumberFormat(locale()).format(data.totalCount) });
+    $('#source-badge').textContent = t(web ? data.cached ? 'webCached' : 'webLive' : data.cached ? 'githubCached' : 'githubLive', { provider: data.provider });
+    list.append(...(web ? data.items.map((item, index) => createWebCard(item, index, data.provider)).filter(Boolean) : data.items.map(createCard)));
+    list.querySelectorAll('.readme-details').forEach((details, index) => { details.open = Boolean(expanded[index]); });
+    $('#empty-state').hidden = count > 0;
+    $('#query-summary').textContent = t('keywords', { query: web ? data.searchQuery : data.githubQuery });
+    $('#query-summary').hidden = false;
+    if (data.warnings?.length) {
+      $('#search-warning').textContent = data.warnings.map(warning => localizeWarning(language, warning)).join(' ');
+      $('#search-warning').hidden = false;
+    }
+    $('#previous-page').disabled = currentPage <= 1;
+    $('#next-page').disabled = !data.hasMore;
+    $('#page-label').textContent = t('page', { page: currentPage });
+    $('#pagination').hidden = web || (currentPage <= 1 && !data.hasMore);
+    $('#search-status').textContent = t(web ? 'webResultStatus' : 'githubResultStatus', { count });
+  }
 
   async function renderSearch(query, page = 1, focus = false, source = currentSource) {
     controller?.abort();
@@ -138,25 +228,10 @@
     const web = source === 'web';
     input.value = query;
     syncInput();
-    const active = Boolean(query);
-    $('.main-content').classList.toggle('has-results', active);
-    $('#intro').hidden = active;
-    $('#suggestions').hidden = active;
-    $('#results-section').hidden = !active;
-    for (const selector of ['#loading-state', '#error-state', '#empty-state', '#pagination', '#search-warning', '#query-summary']) $(selector).hidden = true;
-    list.replaceChildren();
-    $('#results-section').removeAttribute('aria-busy');
-    if (!active) {
-      document.title = 'OpenSeek — Find exactly what you need.';
-      $('#search-status').textContent = '';
-      return;
-    }
-    document.title = `${query} — OpenSeek`;
-    $('#results-heading').textContent = web ? '正在搜索网页…' : 'Searching GitHub…';
-    $('#source-badge').textContent = web ? '网页与在线工具' : 'GitHub · keyword search';
-    $('#loading-state').hidden = false;
-    $('#results-section').setAttribute('aria-busy', 'true');
-    $('#search-status').textContent = web ? '正在搜索网页和在线工具。' : 'Searching GitHub and reading repository documentation.';
+    view = query ? 'loading' : 'home';
+    lastData = null;
+    updateView();
+    if (!query) return;
     if (focus) $('#results-heading').focus({ preventScroll: true });
     const activeController = new AbortController();
     controller = activeController;
@@ -168,26 +243,16 @@
       });
       const data = await response.json();
       if (id !== requestId) return;
-      if (!response.ok) throw new Error(data.error?.message || 'Search is temporarily unavailable.');
-      if (web && data.source !== 'web') throw new Error('The server has not enabled web search yet. Please reload after deployment.');
-      $('#results-heading').textContent = web ? `${data.items.length} 个网页与在线工具` : `${data.items.length} results · ${new Intl.NumberFormat().format(data.totalCount)} repositories found`;
-      $('#source-badge').textContent = web ? `${data.provider} · ${data.cached ? '缓存结果' : '网页搜索'}` : data.cached ? 'GitHub · cached data' : 'GitHub · live data';
-      list.append(...(web ? data.items.map((item, index) => createWebCard(item, index, data.provider)).filter(Boolean) : data.items.map(createCard)));
-      $('#empty-state').hidden = data.items.length > 0;
-      $('#query-summary').textContent = web ? `搜索关键词：${data.searchQuery}` : `Search keywords: ${data.githubQuery}`;
-      $('#query-summary').hidden = false;
-      if (data.warnings.length) { $('#search-warning').textContent = data.warnings.join(' '); $('#search-warning').hidden = false; }
-      $('#previous-page').disabled = page <= 1;
-      $('#next-page').disabled = !data.hasMore;
-      $('#page-label').textContent = `Page ${page}`;
-      $('#pagination').hidden = web || (page <= 1 && !data.hasMore);
-      $('#search-status').textContent = web ? `已找到 ${data.items.length} 个网页，可打开原站查看。` : `${data.items.length} repositories displayed. README mentions are source text matches, not runtime verification.`;
+      if (!response.ok) throw Object.assign(new Error('Search request failed'), { code: data.error?.code });
+      if (web && data.source !== 'web') throw Object.assign(new Error('Web search is not enabled'), { code: 'WEB_NOT_ENABLED' });
+      lastData = data;
+      view = 'results';
+      updateView();
     } catch (error) {
       if (id !== requestId) return;
-      $('#results-heading').textContent = 'Search unavailable';
-      $('#error-message').textContent = error.name === 'AbortError' || error.name === 'TypeError' ? 'The request could not finish. Check your connection and try again.' : error.message;
-      $('#error-state').hidden = false;
-      $('#search-status').textContent = $('#error-message').textContent;
+      lastErrorCode = error.name === 'AbortError' ? 'REQUEST_TIMEOUT' : error.name === 'TypeError' ? 'NETWORK_ERROR' : error.code;
+      view = 'error';
+      updateView();
     } finally {
       clearTimeout(timer);
       if (id === requestId) { $('#loading-state').hidden = true; $('#results-section').removeAttribute('aria-busy'); }
@@ -225,11 +290,15 @@
   $('#retry-search').addEventListener('click', () => renderSearch(currentQuery, currentPage));
   $('#previous-page').addEventListener('click', () => navigate(currentQuery, currentPage - 1));
   $('#next-page').addEventListener('click', () => navigate(currentQuery, currentPage + 1));
-  window.addEventListener('popstate', () => { const state = readLocation(); renderSearch(state.query, state.page, false, state.source); });
+  window.addEventListener('popstate', () => {
+    applyLanguage(new URL(location.href).searchParams.get('lang'));
+    const state = readLocation(); renderSearch(state.query, state.page, false, state.source);
+  });
+  document.querySelectorAll('[data-language]').forEach(choice => choice.addEventListener('click', () => applyLanguage(choice.dataset.language, true)));
 
   const theme = $('#theme-toggle');
   function updateThemeButton() {
-    const label = document.documentElement.dataset.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+    const label = t(document.documentElement.dataset.theme === 'dark' ? 'lightMode' : 'darkMode');
     theme.setAttribute('aria-label', label); theme.title = label;
   }
   theme.addEventListener('click', () => {
@@ -248,15 +317,16 @@
   async function copyText(text, copyButton) {
     try {
       await navigator.clipboard.writeText(text);
-      copyButton.textContent = 'Copied';
-      setTimeout(() => { copyButton.textContent = 'Copy'; }, 1600);
-      $('#toast').textContent = 'Copied source text.';
-    } catch { $('#toast').textContent = 'Select the source text and copy it manually.'; }
+      copyButton.textContent = t('copied');
+      setTimeout(() => { copyButton.textContent = t('copy'); }, 1600);
+      toastKey = 'copiedToast';
+    } catch { toastKey = 'copyFailed'; }
+    $('#toast').textContent = t(toastKey);
     clearTimeout(toastTimer);
     $('#toast').hidden = false;
     toastTimer = setTimeout(() => { $('#toast').hidden = true; }, 3500);
   }
-  updateThemeButton();
+  applyLanguage(language);
   const initial = readLocation();
   renderSearch(initial.query, initial.page, false, initial.source);
 })();

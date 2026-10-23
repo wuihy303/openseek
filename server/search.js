@@ -106,8 +106,12 @@ export function createSearchService({ github, ttl = 300_000, maxConcurrent = 4 }
       const items = await Promise.all(repos.map(async repo => {
         let readme = null;
         let readmeError = null;
+        let readmeErrorCode = null;
         try { readme = await github.readme(repo.owner.login, repo.name, repo.default_branch); }
-        catch (error) { readmeError = error instanceof HttpError ? error.message : 'README could not be loaded.'; }
+        catch (error) {
+          readmeError = error instanceof HttpError ? error.message : 'README could not be loaded.';
+          readmeErrorCode = error instanceof HttpError && error.code !== 'REQUEST_FAILED' ? error.code : 'README_UNAVAILABLE';
+        }
         const evidence = extractReadmeEvidence(readme, plan.requirements);
         const haystack = `${repo.name} ${repo.description || ''} ${(repo.topics || []).join(' ')} ${readme?.text || ''}`.toLowerCase();
         const matches = plan.terms.filter(term => haystack.includes(term));
@@ -119,7 +123,7 @@ export function createSearchService({ github, ttl = 300_000, maxConcurrent = 4 }
           topics: repo.topics || [], matchedTerms: matches,
           matchReason: matches.length ? `Keywords found in repository metadata or README: ${matches.join(', ')}.` : 'Returned by GitHub repository search; inspect the README for suitability.',
           evidence: evidence.found, unverified: evidence.missing,
-          readme, readmeError, installation: extractInstallation(readme)
+          readme, readmeError, readmeErrorCode, installation: extractInstallation(readme)
         };
       }));
       const unavailableReadmes = items.filter(item => !item.readme).length;

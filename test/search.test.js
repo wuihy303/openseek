@@ -59,12 +59,13 @@ test('real metadata is mapped, README evidence extracted, and repeated queries c
 });
 
 test('missing README preserves search results and does not fabricate evidence', async () => {
-  const service = createSearchService({ github: { async search() { return { total_count: 1, items: [repo] }; }, async readme() { throw new HttpError(404, 'README missing'); } } });
+  const service = createSearchService({ github: { async search() { return { total_count: 1, items: [repo] }; }, async readme() { throw new HttpError(404, 'README missing', { code: 'README_NOT_FOUND' }); } } });
   const result = await service({ query: 'offline markdown editor' });
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].readme, null);
   assert.deepEqual(result.items[0].evidence, []);
   assert.match(result.items[0].readmeError, /missing/);
+  assert.equal(result.items[0].readmeErrorCode, 'README_NOT_FOUND');
   assert.match(result.warnings[0], /README sources could not be loaded/);
 });
 

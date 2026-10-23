@@ -21,6 +21,7 @@ npm start
 - 真实 GitHub 仓库搜索：描述、语言、Star 数、最近推送时间、真实仓库链接。
 - 网页与在线工具搜索：标题、摘要、域名、搜索来源及原网页链接；支持中英文。
 - 两种搜索范围可切换，分享链接保留搜索范围和关键词；旧链接默认继续搜索 GitHub。
+- 右上角「中文 / EN」切换界面语言：覆盖搜索、结果说明、分页、复制、空状态和错误提示；记住选择，切换时保留搜索内容和已展开的文档。
 - 中英文关键词处理与语言限定；常见中文领域词映射为英文关键词。
 - README 原文获取、能力关键词定位，附文件名、行号和 GitHub 原文链接。
 - README API 被限流时，自动读取公开仓库默认分支的原始 README；备用请求不携带 GitHub Token。
@@ -32,6 +33,8 @@ npm start
 - 自动化测试和 GitHub Actions CI。
 
 ## 能力边界
+
+界面首次使用时跟随浏览器的中英文偏好，之后优先使用已保存的选择。链接参数 `?lang=zh` / `?lang=en` 可指定显示语言，也可与 `source=web`、`q` 组合。界面文字会翻译；网页标题、摘要、README 和安装代码保留来源原文。
 
 这不是大模型语义搜索：GitHub 检索使用规则化关键词和 GitHub 搜索，中文词表可在 `server/search.js` 扩展。仓库排序在 GitHub 返回的当前页候选中进行。
 
@@ -50,7 +53,7 @@ npm start
 应用存活检查，不会调用 GitHub：
 
 ```json
-{"status":"ok","service":"openseek","version":"1.1.1"}
+{"status":"ok","service":"openseek","version":"1.2.0"}
 ```
 
 ### `POST /api/search`
@@ -86,7 +89,7 @@ GitHub 返回包括 `items`、`totalCount`、`hasMore`、`githubQuery`、`fetche
 
 网页返回 `source: "web"`、`provider`、`searchQuery` 和 `items`。每个结果包含 `title`、`url`、`domain`、`description`；`totalCount` 为 `null`，`hasMore` 为 `false`，不编造全网结果总数。
 
-README 获取失败时保留仓库元数据，返回 `readmeError`；不会填入演示数据。`evidence` 包含匹配行原文、行号和来源链接。`installation` 没有匹配片段时为 `null`。
+README 获取失败时保留仓库元数据，返回 `readmeError` 和用于界面翻译的 `readmeErrorCode`；不会填入演示数据。`evidence` 包含匹配行原文、行号和来源链接。`installation` 没有匹配片段时为 `null`。
 
 错误格式：
 
